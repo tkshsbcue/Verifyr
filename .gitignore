@@ -1,0 +1,10 @@
+./idea
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets & artifacts
+.env
+runs/

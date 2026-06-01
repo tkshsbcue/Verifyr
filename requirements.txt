@@ -1,0 +1,7 @@
+# Verifyr Phase 0 dependencies
+Appium-Python-Client>=3.1.0     # Appium client (pulls in selenium)
+openai>=1.30.0                  # default VLM provider (GPT)
+anthropic>=0.39.0              # alternate VLM provider (Claude)
+PyYAML>=6.0                     # optional YAML goals files
+python-dotenv>=1.0.0           # optional .env loading
+playwright>=1.44.0             # live web source-of-truth capture (run: playwright install chromium)

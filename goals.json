@@ -1,0 +1,19 @@
+{
+  "_about": "Goals for the Verifyr eval harness. Each entry is a bare string or an object {goal, web_value | web_url+web_selector}. The source-of-truth value is used by the parity verifier when the agent emits an assert. Provide either a literal web_value, or a web_url (+optional web_selector / web_attribute) to capture it live with Playwright.",
+  "goals": [
+    {
+      "goal": "Open the product 'Summer Tote' and read its displayed price",
+      "web_value": "49.00"
+    },
+    {
+      "goal": "Open the product 'Summer Tote' and read its displayed price",
+      "web_url": "https://shop.example.com/products/summer-tote",
+      "web_selector": ".product .price"
+    },
+    {
+      "goal": "Open the app Settings screen and read the app version number",
+      "web_value": null
+    },
+    "Navigate to the cart and report how many items it contains"
+  ]
+}
