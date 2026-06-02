@@ -1,37 +1,56 @@
-# Team-hosted deployment: API + Postgres.
+# Verifyr — one-command run.
 #
-# NOTE: this runs the SERVER, not the Android emulator. Point APPIUM_SERVER_URL at
-# wherever Appium + the emulator actually run (a device host / KVM-enabled runner).
-# On Docker Desktop, host.docker.internal reaches services on your machine.
+#   cp .env.example .env      # set OPENAI_API_KEY (+ JWT_SECRET, ADMIN_*)
+#   docker compose up --build
+#   open http://localhost:8000
+#
+# The app container is self-contained (SQLite on a named volume, built frontend
+# served at /). It still needs an Appium + Android emulator to drive apps:
+#   • macOS / Windows: run the emulator + Appium on your host; the default
+#     APPIUM_SERVER_URL=http://host.docker.internal:4723 reaches it.
+#   • Linux with /dev/kvm: bring up the bundled emulator too:
+#       docker compose --profile emulator up --build
+#     and set APPIUM_SERVER_URL=http://emulator:4723 in .env.
 
 services:
-  db:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: verifyr
-      POSTGRES_PASSWORD: verifyr
-      POSTGRES_DB: verifyr
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U verifyr"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   app:
     build: .
-    env_file: .env
+    env_file: [.env]
     environment:
-      DATABASE_URL: postgresql+psycopg://verifyr:verifyr@db:5432/verifyr
-      APPIUM_SERVER_URL: http://host.docker.internal:4723
-      JWT_SECRET: ${JWT_SECRET:-change-me-please}
-      CORS_ORIGINS: http://localhost:8000
+      # Self-contained persistence on the named volume (no external DB needed).
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/verifyr.db}
+      RUNS_DIR: /data/runs
+      UPLOAD_DIR: /data/uploads
+      JWT_SECRET: ${JWT_SECRET:-change-me-please-set-a-32-byte-secret}
+      APPIUM_SERVER_URL: ${APPIUM_SERVER_URL:-http://host.docker.internal:4723}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8000}
+      # If both set, an admin user is created on first boot.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # lets Linux reach a host-run Appium
     ports:
       - "8000:8000"
-    depends_on:
-      db:
-        condition: service_healthy
+    volumes:
+      - verifyr-data:/data
+    restart: unless-stopped
+
+  # Optional: a full Android emulator + Appium in a container.
+  # Requires a Linux host with /dev/kvm. Enable with: --profile emulator
+  emulator:
+    profiles: ["emulator"]
+    image: budtmo/docker-android:emulator_13.0
+    privileged: true
+    devices:
+      - /dev/kvm
+    environment:
+      EMULATOR_DEVICE: "Samsung Galaxy S10"
+      WEB_VNC: "true"      # watch the screen at http://localhost:6080
+      APPIUM: "true"       # Appium server on 4723
+    ports:
+      - "4723:4723"
+      - "6080:6080"
+    restart: unless-stopped
 
 volumes:
-  pgdata:
+  verifyr-data:

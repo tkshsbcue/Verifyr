@@ -24,5 +24,10 @@ COPY --from=web /web/dist ./frontend/dist
 
 # Run from backend/ so the `verifyr` and `server` packages are importable.
 WORKDIR /app/backend
+RUN chmod +x docker-entrypoint.sh
+
 EXPOSE 8000
-CMD ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health').status==200 else 1)" || exit 1
+
+ENTRYPOINT ["./docker-entrypoint.sh"]

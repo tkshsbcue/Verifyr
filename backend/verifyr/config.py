@@ -33,8 +33,10 @@ except Exception:  # pragma: no cover - dotenv is a convenience only
     pass
 
 
-# Directories we search for relative resources (prompts, etc.), in priority order.
-_SEARCH_BASES = (Path.cwd(), BACKEND_DIR, PROJECT_ROOT)
+# Directories searched for the prompt config, in priority order. A local copy
+# (CWD, backend/, repo root, or their idea/ subdir) overrides the canonical prompt
+# bundled inside the package, so the app always has a working prompt to fall back on.
+_SEARCH_BASES = (Path.cwd(), BACKEND_DIR, PROJECT_ROOT, ENGINE_DIR / "prompts")
 
 
 # Fields in prompt.json that are stored as arrays of lines and must be joined.

@@ -33,7 +33,35 @@ Browser (React)  ──HTTP/WS──>  FastAPI  ──>  runner thread  ──> 
 | `reporting.py` | `Reporter` hook the engine emits events through (repo root) |
 | `web/` | React dashboard (Vite) |
 
-## Prerequisites
+## Run with Docker (easiest)
+
+The whole app runs from one container — built frontend, API, and a SQLite
+database on a named volume. From the repo root:
+
+```bash
+cp .env.example .env        # set OPENAI_API_KEY (+ JWT_SECRET, ADMIN_EMAIL/PASSWORD)
+docker compose up --build   # or: make up
+# open http://localhost:8000  and log in with ADMIN_EMAIL / ADMIN_PASSWORD
+```
+
+That gives you the full dashboard with persistence. To actually drive an app you
+still need Appium + an Android emulator reachable from the container:
+
+- **macOS / Windows** — run the emulator + Appium on your host (see
+  [RUNNING_phase_0.md](RUNNING_phase_0.md)). The default
+  `APPIUM_SERVER_URL=http://host.docker.internal:4723` reaches it.
+- **Linux with `/dev/kvm`** — bring up the bundled emulator too:
+  ```bash
+  docker compose --profile emulator up --build      # or: make up-emulator
+  ```
+  Set `APPIUM_SERVER_URL=http://emulator:4723` in `.env`, and watch the screen at
+  `http://localhost:6080` (noVNC).
+
+`make` shortcuts: `make up`, `make logs`, `make seed`, `make down`, `make shell`.
+
+Data (DB, uploaded APKs, run artifacts) persists in the `verifyr-data` volume.
+
+## Prerequisites (local, without Docker)
 
 Everything from [RUNNING_phase_0.md](RUNNING_phase_0.md) (emulator + Appium + `.env`), plus:
 
@@ -114,13 +142,19 @@ Plus all the engine vars (`OPENAI_API_KEY`, `APP_PACKAGE`, `IMPERSONATE_KEY`, �
 
 ## Deployment notes (team-hosted)
 
-- A `Dockerfile` + `docker-compose.yml` build the frontend and run the API with
-  Postgres. See the repo root.
-- **Important:** the container runs the *server*, not the Android emulator. Appium
-  + the emulator must run somewhere the server can reach, and `APPIUM_SERVER_URL`
-  must point at it. Running an emulator in Docker/CI needs a KVM-enabled host (e.g.
-  an `android-emulator` image on a bare-metal/nested-virt runner) — that device
-  infrastructure is the main work beyond this app.
+- `docker compose up` runs the whole app (frontend + API + SQLite volume). For a
+  shared/hosted deployment, switch to Postgres by setting `DATABASE_URL`
+  (e.g. `postgresql+psycopg://user:pass@host/db`) in `.env` and adding a Postgres
+  service — `psycopg` is already installed in the image.
+- Set a strong `JWT_SECRET` and put it behind HTTPS (a reverse proxy) before
+  exposing it.
+- **The emulator is the hard part.** The `app` container drives apps over Appium
+  but does not contain a device. The bundled `emulator` profile
+  (`budtmo/docker-android`) needs a **Linux host with `/dev/kvm`** (bare-metal or
+  nested-virt). On macOS/Windows, Docker can't pass through KVM, so run the
+  emulator + Appium on the host and point `APPIUM_SERVER_URL` at
+  `host.docker.internal`. This device infrastructure is the main work for true
+  multi-user hosting.
 - Runs serialize through a single worker because there's one device. For parallel
   throughput you'd run one worker per connected device (future work).
 
