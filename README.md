@@ -17,14 +17,32 @@ contract.
 | [docs/PHASE1.md](docs/PHASE1.md) | the parity checker (web ↔ API ↔ app + classifier) |
 | [docs/GUI.md](docs/GUI.md) | the web dashboard (FastAPI + React): manage, run, schedule, history |
 
-**CLI** (Phase 0/1): `python agent.py --goal "..."`, `python parity.py --check "..."`.
-**Dashboard**: `uvicorn server.main:app` + `cd web && npm run dev` — see docs/GUI.md.
+## Project structure
+
+```
+backend/                 # all Python — run commands start with `cd backend`
+  verifyr/               # the engine (importable package): agent, parity, vlm, device, …
+  server/                # FastAPI app (imports verifyr): auth, checks, runs, runner, scheduler
+  requirements.txt       # engine deps        requirements-server.txt  # + server deps
+  checks.json  goals.json
+frontend/                # React + Vite dashboard
+docs/                    # RUNNING_phase_0.md, PHASE1.md, GUI.md
+idea/                    # prompt JSON (the engine contract)
+Dockerfile  docker-compose.yml  .env.example
+```
+
+The engine is a package, so the CLI runs as modules **from `backend/`**:
+
+**CLI**: `cd backend && python -m verifyr.agent --goal "..."`, `python -m verifyr.parity --check "..."`.
+**Dashboard**: `cd backend && uvicorn server.main:app` + `cd frontend && npm run dev` — see docs/GUI.md.
 
 ---
 
 ## Phase 0 — the agent loop
 
 ## Architecture
+
+Engine modules live under `backend/verifyr/`.
 
 | File | Concern |
 |------|---------|
@@ -65,10 +83,10 @@ contract.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 playwright install chromium      # for live web source-of-truth capture
 
-cp .env.example .env      # then edit .env
+cp .env.example .env      # then edit .env (kept at the repo root)
 ```
 
 ### Required environment variables
@@ -89,25 +107,26 @@ cp .env.example .env      # then edit .env
 - `APP_PACKAGE` + `APP_ACTIVITY` — launch an installed app, **or**
 - `APP_PATH` — absolute path to an `.apk`
 
-Sanity-check your config without a device:
+Sanity-check your config without a device (from `backend/`):
 ```bash
-python config.py
+cd backend && python -m verifyr.config
 ```
 
 ## Run a single goal
 
 ```bash
-python agent.py --goal "Open the product 'Summer Tote' and read its displayed price" \
-                --web-value "49.00"
+cd backend
+python -m verifyr.agent --goal "Open the product 'Summer Tote' and read its displayed price" \
+                        --web-value "49.00"
 ```
 
 - `--web-value` is the source of truth; when the agent emits an `assert`, the
   verifier judges the on-screen value against it. Omit it to skip verification.
 - Or capture the source of truth live from a webpage with Playwright:
   ```bash
-  python agent.py --goal "Open the product 'Summer Tote' and read its displayed price" \
-                  --web-url "https://shop.example.com/products/summer-tote" \
-                  --web-selector ".product .price"
+  python -m verifyr.agent --goal "Open the product 'Summer Tote' and read its displayed price" \
+                          --web-url "https://shop.example.com/products/summer-tote" \
+                          --web-selector ".product .price"
   ```
   `--web-selector` is a CSS/Playwright selector (omit it to use the page title);
   `--web-attribute value` reads an attribute (e.g. an `<input>`'s value) instead
@@ -119,7 +138,7 @@ python agent.py --goal "Open the product 'Summer Tote' and read its displayed pr
 ## Run the eval harness
 
 ```bash
-python eval.py --goals goals.json --runs 3
+python -m verifyr.eval --goals goals.json --runs 3
 ```
 
 Each goal runs N times. Output is a summary table — **Pass@1**, **Pass@N**,

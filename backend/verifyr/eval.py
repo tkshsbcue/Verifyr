@@ -19,7 +19,7 @@ import json
 import os
 from collections import Counter
 
-from agent import (
+from .agent import (
     FAIL_ELEMENT_NOT_FOUND,
     FAIL_LOOP,
     FAIL_VERIFIER_MISMATCH,
@@ -27,10 +27,10 @@ from agent import (
     STATUS_PASS,
     Agent,
 )
-from config import load_all
-from device import Device
-from verifier import WebCaptureError, resolve_web_value
-from vlm import get_vlm
+from .config import load_all
+from .device import Device
+from .verifier import WebCaptureError, resolve_web_value
+from .vlm import get_vlm
 
 FAILURE_BUCKETS = (FAIL_WRONG_TAP, FAIL_LOOP, FAIL_ELEMENT_NOT_FOUND, FAIL_VERIFIER_MISMATCH)
 

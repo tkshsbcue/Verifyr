@@ -11,7 +11,7 @@ runs/
 *.db
 
 # Frontend
-web/node_modules/
-web/dist/
+frontend/node_modules/
+frontend/dist/
 uploads/
-web/*.tsbuildinfo
+frontend/*.tsbuildinfo

@@ -26,18 +26,18 @@ import json
 import os
 import re
 
-from agent import Agent
-from api_check import fetch_api_value
-from buildinfo import installed_build, version_lt
-from checks import Check, get_check, load_checks
-from classifier import classify
-from config import PromptConfig, Settings, load_all
-from device import Device, DeviceError
-from login import perform_login
-from reporting import Reporter
-from verifier import verify
-from vlm import VLMClient, get_vlm
-from web_extractor import resolve_web_value_for_check
+from .agent import Agent
+from .api_check import fetch_api_value
+from .buildinfo import installed_build, version_lt
+from .checks import Check, get_check, load_checks
+from .classifier import classify
+from .config import PromptConfig, Settings, load_all
+from .device import Device, DeviceError
+from .login import perform_login
+from .reporting import Reporter
+from .verifier import verify
+from .vlm import VLMClient, get_vlm
+from .web_extractor import resolve_web_value_for_check
 
 
 def _now_stamp() -> str:

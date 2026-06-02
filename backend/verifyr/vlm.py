@@ -15,7 +15,7 @@ import json
 import re
 from typing import Any
 
-from config import Settings
+from .config import Settings
 
 
 class VLMError(RuntimeError):

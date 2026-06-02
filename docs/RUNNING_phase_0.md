@@ -18,7 +18,7 @@ cd /Users/kumartanay/Verifyr
 # Python environment + dependencies
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 playwright install chromium            # browser for web source-of-truth capture
 
 # Appium server + Android driver (Node.js required)
@@ -29,11 +29,14 @@ appium driver install uiautomator2
 cp .env.example .env                   # then edit (see section 2)
 ```
 
+> **All CLI commands below run from `backend/`** (`cd backend`), since the engine
+> is the `verifyr` package. The `.env` stays at the repo root and is auto-loaded.
+
 ---
 
 ## 2. Configure `.env`
 
-`config.py` auto-loads `.env`. Required values:
+The engine auto-loads `.env` from the repo root. Required values:
 
 ```ini
 # VLM
@@ -59,7 +62,7 @@ APP_ACTIVITY=com.empirecrypto.mobile.MainActivity
 Sanity-check the config without a device:
 ```bash
 source .venv/bin/activate
-python config.py
+python -m verifyr.config
 ```
 
 ---
@@ -104,13 +107,13 @@ adb shell pm list packages | grep empirecrypto      # confirm
 
 ### Terminal C — the agent
 ```bash
-cd /Users/kumartanay/Verifyr
-source .venv/bin/activate
+cd /Users/kumartanay/Verifyr/backend
+source ../.venv/bin/activate
 
 # Optional: reset the app to a clean state first
 adb shell am force-stop com.empirecrypto.mobile
 
-python agent.py --goal "Skip onboarding and report the first main screen title"
+python -m verifyr.agent --goal "Skip onboarding and report the first main screen title"
 ```
 
 ### Agent flags
@@ -130,17 +133,17 @@ python agent.py --goal "Skip onboarding and report the first main screen title"
 
 Basic:
 ```bash
-python agent.py --goal "Open the markets screen and read the BTC price"
+python -m verifyr.agent --goal "Open the markets screen and read the BTC price"
 ```
 
 Parity check against a literal value:
 ```bash
-python agent.py --goal "Read the BTC price" --web-value "₹1,099.00"
+python -m verifyr.agent --goal "Read the BTC price" --web-value "₹1,099.00"
 ```
 
 Parity check captured live from a webpage:
 ```bash
-python agent.py --goal "Read the product price" \
+python -m verifyr.agent --goal "Read the product price" \
   --web-url "https://www.amazon.in/.../dp/B0G26LRCSV/" \
   --web-selector ".a-price .a-offscreen"
 ```
@@ -153,7 +156,7 @@ Run every goal N times and print a reliability table (Pass@1, Pass@N, average
 steps, average latency, failure tally).
 
 ```bash
-python eval.py --goals goals.json --runs 3
+python -m verifyr.eval --goals goals.json --runs 3
 ```
 
 `goals.json` entries are a bare string or an object:
@@ -194,7 +197,7 @@ The eval harness writes `runs/eval-<timestamp>/` with one folder per run plus a
 ## Quick start (services already running)
 
 ```bash
-cd /Users/kumartanay/Verifyr && source .venv/bin/activate
+cd /Users/kumartanay/Verifyr/backend && source ../.venv/bin/activate
 adb shell am force-stop com.empirecrypto.mobile
-python agent.py --goal "Skip onboarding and report the first main screen title"
+python -m verifyr.agent --goal "Skip onboarding and report the first main screen title"
 ```

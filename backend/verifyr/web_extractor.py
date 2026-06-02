@@ -10,9 +10,9 @@ resolve_web_value_for_check() picks the right path for a Check.
 
 from __future__ import annotations
 
-from config import PromptConfig
-from verifier import WebCaptureError, capture_web_value
-from vlm import VLMClient, VLMError
+from .config import PromptConfig
+from .verifier import WebCaptureError, capture_web_value
+from .vlm import VLMClient, VLMError
 
 
 def capture_page_text(url: str, timeout_ms: int = 15000, max_chars: int = 6000) -> tuple[str, str | None]:

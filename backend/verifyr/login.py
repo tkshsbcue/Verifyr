@@ -17,8 +17,8 @@ import time
 from appium.webdriver.common.appiumby import AppiumBy
 from selenium.common.exceptions import WebDriverException
 
-from config import Settings
-from device import ActionResult, Device
+from .config import Settings
+from .device import ActionResult, Device
 
 
 def _find_edit_field(device: Device):

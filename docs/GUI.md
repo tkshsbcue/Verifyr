@@ -39,8 +39,8 @@ Everything from [RUNNING_phase_0.md](RUNNING_phase_0.md) (emulator + Appium + `.
 
 ```bash
 source .venv/bin/activate
-pip install -r requirements-server.txt        # backend deps
-cd web && npm install && cd ..                 # frontend deps (Node 18+)
+pip install -r backend/requirements-server.txt        # backend deps
+cd frontend && npm install && cd ..                 # frontend deps (Node 18+)
 ```
 
 ## Running (development)
@@ -51,19 +51,20 @@ Four processes. The emulator + Appium are the same as the CLI.
 # 1) emulator         (see RUNNING_phase_0.md)
 # 2) appium
 
-# 3) backend API
-source .venv/bin/activate
+# 3) backend API  (run from backend/)
+cd backend
+source ../.venv/bin/activate
 export JWT_SECRET="$(python -c 'import secrets;print(secrets.token_hex(32))')"
 uvicorn server.main:app --reload --port 8000
 
 # 4) frontend (Vite dev server, proxies /api + /artifacts to :8000)
-cd web && npm run dev          # open http://localhost:5173
+cd frontend && npm run dev          # open http://localhost:5173
 ```
 
-First time, create a user (either click **Register** in the UI, or seed):
+First time, create a user (either click **Register** in the UI, or seed from `backend/`):
 
 ```bash
-python -m server.seed --checks checks.json --email you@co.com --password secret123
+cd backend && python -m server.seed --checks checks.json --email you@co.com --password secret123
 ```
 
 ## Running (single-process, production-style)
@@ -71,7 +72,7 @@ python -m server.seed --checks checks.json --email you@co.com --password secret1
 Build the frontend; the backend then serves it at `/`:
 
 ```bash
-cd web && npm run build && cd ..
+cd frontend && npm run build && cd ../backend
 uvicorn server.main:app --host 0.0.0.0 --port 8000
 # open http://localhost:8000
 ```

@@ -85,10 +85,10 @@ Prerequisites are the same as Phase 0 (emulator + Appium running, `.env` set —
 see [RUNNING_phase_0.md](RUNNING_phase_0.md)).
 
 ```bash
-source .venv/bin/activate
-python parity.py --check "BTC price (demo: public API)"   # one check
-python parity.py --all                                    # every check in checks.json
-python parity.py --all --checks mychecks.json --quiet
+cd backend && source ../.venv/bin/activate
+python -m verifyr.parity --check "BTC price (demo: public API)"   # one check
+python -m verifyr.parity --all                                    # every check in checks.json
+python -m verifyr.parity --all --checks mychecks.json --quiet
 ```
 
 Output: a verdict table on the console and per-check JSON + agent traces under

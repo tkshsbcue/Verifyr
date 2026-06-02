@@ -13,15 +13,28 @@ import json
 import os
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
+# Anchor file paths to the project, not the current working directory, so the CLI
+# and server resolve prompts/.env/runs the same way regardless of where they run.
+# Layout: <PROJECT_ROOT>/backend/verifyr/config.py
+ENGINE_DIR = Path(__file__).resolve().parent          # backend/verifyr
+BACKEND_DIR = ENGINE_DIR.parent                       # backend
+PROJECT_ROOT = BACKEND_DIR.parent                     # repo root
+
 try:
-    # Optional: load a local .env if present. Never required.
+    # Optional: load .env (prefer the project root's) if present. Never required.
     from dotenv import load_dotenv
 
-    load_dotenv()
+    _root_env = PROJECT_ROOT / ".env"
+    load_dotenv(_root_env if _root_env.is_file() else None)
 except Exception:  # pragma: no cover - dotenv is a convenience only
     pass
+
+
+# Directories we search for relative resources (prompts, etc.), in priority order.
+_SEARCH_BASES = (Path.cwd(), BACKEND_DIR, PROJECT_ROOT)
 
 
 # Fields in prompt.json that are stored as arrays of lines and must be joined.
@@ -71,12 +84,17 @@ def _resolve_prompt_path() -> str:
         if not os.path.isfile(explicit):
             raise FileNotFoundError(f"PROMPT_CONFIG points to a missing file: {explicit}")
         return explicit
-    for candidate in _PROMPT_CANDIDATES:
-        if os.path.isfile(candidate):
-            return candidate
+    # Try each candidate under each search base (CWD, backend/, project root).
+    for base in _SEARCH_BASES:
+        for candidate in _PROMPT_CANDIDATES:
+            path = base / candidate
+            if path.is_file():
+                return str(path)
     raise FileNotFoundError(
-        "Could not find a prompt config. Set PROMPT_CONFIG or place one of: "
+        "Could not find a prompt config. Set PROMPT_CONFIG or place one of "
         + ", ".join(_PROMPT_CANDIDATES)
+        + " under one of: "
+        + ", ".join(str(b) for b in _SEARCH_BASES)
     )
 
 
@@ -212,7 +230,7 @@ class Settings:
             login_flow=os.environ.get("LOGIN_FLOW"),
             impersonate_key=os.environ.get("IMPERSONATE_KEY"),
             impersonate_user=os.environ.get("IMPERSONATE_USER"),
-            runs_dir=os.environ.get("RUNS_DIR", "runs"),
+            runs_dir=os.environ.get("RUNS_DIR", str(PROJECT_ROOT / "runs")),
         )
 
     def appium_capabilities(self) -> dict:

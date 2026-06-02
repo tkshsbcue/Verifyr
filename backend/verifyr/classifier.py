@@ -10,8 +10,8 @@ passed or failed and what to do next. Verdicts:
 
 from __future__ import annotations
 
-from config import PromptConfig
-from vlm import VLMClient, VLMError
+from .config import PromptConfig
+from .vlm import VLMClient, VLMError
 
 VALID_VERDICTS = {
     "pass",

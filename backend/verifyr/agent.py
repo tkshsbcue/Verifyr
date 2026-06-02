@@ -26,11 +26,11 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from config import PromptConfig, Settings, load_all
-from device import Device, DeviceError, ERR_ELEMENT_NOT_FOUND
-from reporting import Reporter
-from verifier import resolve_web_value, verify
-from vlm import VLMClient, VLMError, get_vlm
+from .config import PromptConfig, Settings, load_all
+from .device import Device, DeviceError, ERR_ELEMENT_NOT_FOUND
+from .reporting import Reporter
+from .verifier import resolve_web_value, verify
+from .vlm import VLMClient, VLMError, get_vlm
 
 # Outcome statuses recorded in run.json / used by the eval harness.
 STATUS_PASS = "pass"

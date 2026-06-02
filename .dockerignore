@@ -4,7 +4,8 @@ __pycache__/
 *.db
 .env
 runs/
-web/node_modules/
-web/dist/
+uploads/
+frontend/node_modules/
+frontend/dist/
 .git/
 idea/

@@ -7,6 +7,8 @@ import os
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from verifyr.config import PROJECT_ROOT
+
 from ..db import get_db
 from ..deps import current_user
 from ..models import Apk, User
@@ -14,7 +16,7 @@ from ..schemas import ApkOut
 
 router = APIRouter(prefix="/api/apks", tags=["apks"])
 
-UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "uploads")
+UPLOAD_DIR = os.environ.get("UPLOAD_DIR", str(PROJECT_ROOT / "uploads"))
 
 
 def _parse_apk(path: str) -> dict:

@@ -12,8 +12,8 @@ whichever was provided.
 
 from __future__ import annotations
 
-from config import PromptConfig
-from vlm import VLMClient, VLMError
+from .config import PromptConfig
+from .vlm import VLMClient, VLMError
 
 
 def _render(template: str, **values) -> str:

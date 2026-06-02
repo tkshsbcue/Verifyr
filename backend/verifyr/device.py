@@ -23,7 +23,7 @@ from appium.options.android import UiAutomator2Options
 from appium.webdriver.common.appiumby import AppiumBy
 from selenium.common.exceptions import WebDriverException
 
-from config import Settings
+from .config import Settings
 
 
 # Element-failure marker the agent maps to the "element-not-found" failure bucket.

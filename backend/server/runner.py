@@ -7,23 +7,19 @@ A single worker (max_workers=1) serializes runs because there is one emulator.
 from __future__ import annotations
 
 import os
-import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-# Make the engine modules (repo root) importable from within the server package.
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from verifyr import parity
+from verifyr.checks import Check as EngineCheck
+from verifyr.config import load_all
+from verifyr.reporting import CallbackReporter
+from verifyr.vlm import get_vlm
 
-import parity  # noqa: E402  (engine orchestrator)
-from checks import Check as EngineCheck  # noqa: E402
-from config import load_all  # noqa: E402
-from reporting import CallbackReporter  # noqa: E402
-from vlm import get_vlm  # noqa: E402
-
-from .db import SessionLocal  # noqa: E402
-from .events import bus  # noqa: E402
-from .models import Apk, Run  # noqa: E402
-from .settings import server_settings  # noqa: E402
+from .db import SessionLocal
+from .events import bus
+from .models import Apk, Run
+from .settings import server_settings
 
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="verifyr-run")
 
@@ -139,9 +135,9 @@ def _execute_quick(run_id: int) -> None:
     """Run the Phase-0 agent on an uploaded APK with a free-text goal."""
     import dataclasses
 
-    from agent import Agent
-    from device import Device
-    from verifier import resolve_web_value
+    from verifyr.agent import Agent
+    from verifyr.device import Device
+    from verifyr.verifier import resolve_web_value
 
     db = SessionLocal()
     run = db.get(Run, run_id)
