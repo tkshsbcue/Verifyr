@@ -67,6 +67,11 @@ python -m verifyr.config
 
 ---
 
+> **Auto-launch:** Verifyr launches an existing AVD for you when no device is
+> running (controlled by `AUTO_START_EMULATOR`, default on), and shows a clear
+> error if no emulator/AVD exists. You still need **Appium** running (below). To
+> manage the device yourself, set `AUTO_START_EMULATOR=false`.
+
 ## 3. Start the emulator and Appium (two background services)
 
 These must be running before the agent. Use separate terminals (or run in the

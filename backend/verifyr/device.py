@@ -59,6 +59,12 @@ class Device:
 
     # ---- lifecycle ---------------------------------------------------------
     def connect(self) -> None:
+        # Preflight: use a running device, else launch an existing AVD, else error.
+        if self.settings.auto_start_emulator:
+            from .preflight import ensure_emulator
+
+            ensure_emulator(self.settings)
+
         options = UiAutomator2Options().load_capabilities(self.settings.appium_capabilities())
         url = self.settings.appium_server_url
         try:

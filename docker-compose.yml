@@ -24,6 +24,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-please-set-a-32-byte-secret}
       APPIUM_SERVER_URL: ${APPIUM_SERVER_URL:-http://host.docker.internal:4723}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8000}
+      # The container can't launch a host emulator; let Appium's host manage it.
+      AUTO_START_EMULATOR: ${AUTO_START_EMULATOR:-false}
       # If both set, an admin user is created on first boot.
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}

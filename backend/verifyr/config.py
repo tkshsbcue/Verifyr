@@ -193,6 +193,8 @@ class Settings:
     udid: str | None = None
     new_command_timeout: int = 120
     no_reset: bool = True
+    auto_start_emulator: bool = True       # launch an existing AVD if no device is running
+    emulator_boot_timeout: int = 180
 
     # App under test
     app_package: str | None = None
@@ -226,6 +228,8 @@ class Settings:
             udid=os.environ.get("ANDROID_UDID"),
             new_command_timeout=int(os.environ.get("APPIUM_NEW_COMMAND_TIMEOUT", "120")),
             no_reset=_env_bool("APPIUM_NO_RESET", True),
+            auto_start_emulator=_env_bool("AUTO_START_EMULATOR", True),
+            emulator_boot_timeout=int(os.environ.get("EMULATOR_BOOT_TIMEOUT", "180")),
             app_package=os.environ.get("APP_PACKAGE"),
             app_activity=os.environ.get("APP_ACTIVITY"),
             app_path=os.environ.get("APP_PATH"),
