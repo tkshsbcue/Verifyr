@@ -59,11 +59,16 @@ class Device:
 
     # ---- lifecycle ---------------------------------------------------------
     def connect(self) -> None:
-        # Preflight: use a running device, else launch an existing AVD, else error.
+        # Preflight: ensure Appium is up and a device is available (launching an
+        # existing AVD / a local Appium server if needed), else a clear error.
         if self.settings.auto_start_emulator:
             from .preflight import ensure_emulator
 
             ensure_emulator(self.settings)
+        if self.settings.auto_start_appium:
+            from .preflight import ensure_appium
+
+            ensure_appium(self.settings)
 
         options = UiAutomator2Options().load_capabilities(self.settings.appium_capabilities())
         url = self.settings.appium_server_url

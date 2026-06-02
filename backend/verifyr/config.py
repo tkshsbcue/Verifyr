@@ -195,6 +195,8 @@ class Settings:
     no_reset: bool = True
     auto_start_emulator: bool = True       # launch an existing AVD if no device is running
     emulator_boot_timeout: int = 180
+    auto_start_appium: bool = True         # start a local Appium server if not reachable
+    appium_start_timeout: int = 60
 
     # App under test
     app_package: str | None = None
@@ -230,6 +232,8 @@ class Settings:
             no_reset=_env_bool("APPIUM_NO_RESET", True),
             auto_start_emulator=_env_bool("AUTO_START_EMULATOR", True),
             emulator_boot_timeout=int(os.environ.get("EMULATOR_BOOT_TIMEOUT", "180")),
+            auto_start_appium=_env_bool("AUTO_START_APPIUM", True),
+            appium_start_timeout=int(os.environ.get("APPIUM_START_TIMEOUT", "60")),
             app_package=os.environ.get("APP_PACKAGE"),
             app_activity=os.environ.get("APP_ACTIVITY"),
             app_path=os.environ.get("APP_PATH"),
