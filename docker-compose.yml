@@ -1,0 +1,37 @@
+# Team-hosted deployment: API + Postgres.
+#
+# NOTE: this runs the SERVER, not the Android emulator. Point APPIUM_SERVER_URL at
+# wherever Appium + the emulator actually run (a device host / KVM-enabled runner).
+# On Docker Desktop, host.docker.internal reaches services on your machine.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: verifyr
+      POSTGRES_PASSWORD: verifyr
+      POSTGRES_DB: verifyr
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U verifyr"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://verifyr:verifyr@db:5432/verifyr
+      APPIUM_SERVER_URL: http://host.docker.internal:4723
+      JWT_SECRET: ${JWT_SECRET:-change-me-please}
+      CORS_ORIGINS: http://localhost:8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

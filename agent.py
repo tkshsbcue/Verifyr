@@ -28,6 +28,7 @@ from typing import Any
 
 from config import PromptConfig, Settings, load_all
 from device import Device, DeviceError, ERR_ELEMENT_NOT_FOUND
+from reporting import Reporter
 from verifier import resolve_web_value, verify
 from vlm import VLMClient, VLMError, get_vlm
 
@@ -89,6 +90,8 @@ class RunResult:
     failure_reason: str | None
     verifier: dict | None
     run_dir: str
+    asserted_value: str | None = None
+    assert_screenshot: str | None = None
     trace: list[dict] = field(default_factory=list)
 
 
@@ -102,6 +105,7 @@ class Agent:
         stuck_threshold: int = 3,
         max_consecutive_errors: int = 3,
         verbose: bool = True,
+        reporter: Reporter | None = None,
     ):
         self.prompt = prompt
         self.settings = settings
@@ -110,6 +114,7 @@ class Agent:
         self.stuck_threshold = stuck_threshold
         self.max_consecutive_errors = max_consecutive_errors
         self.verbose = verbose
+        self.reporter = reporter or Reporter()
 
     def _log(self, msg: str) -> None:
         if self.verbose:
@@ -133,9 +138,12 @@ class Agent:
         reason = "Step budget exhausted before the goal was reached."
         failure_reason: str | None = FAIL_LOOP
         verifier_out: dict | None = None
+        asserted_value: str | None = None
+        assert_screenshot: str | None = None
 
         self._log(f"\n=== GOAL: {goal} ===")
         self._log(f"run dir: {run_dir}  | budget: {max_steps} steps\n")
+        self.reporter.emit("run_start", {"goal": goal, "max_steps": max_steps, "run_dir": run_dir})
 
         for step in range(1, max_steps + 1):
             step_record: dict[str, Any] = {"step": step}
@@ -225,9 +233,24 @@ class Agent:
             step_record["result"] = asdict(result) if hasattr(result, "__dataclass_fields__") else result
             if isinstance(result, dict) and result.get("verifier"):
                 verifier_out = result["verifier"]
+            if atype == "assert":
+                asserted_value = action.get("found_value")
+                assert_screenshot = shot_path
 
             recent.append({"step": step, "action": action, "result": step_record["result"]})
             trace.append(step_record)
+            self.reporter.emit(
+                "step",
+                {
+                    "step": step,
+                    "max_steps": max_steps,
+                    "observation": observation,
+                    "reasoning": reasoning,
+                    "action": action,
+                    "result": step_record["result"],
+                    "screenshot": shot_path,
+                },
+            )
 
             # Track consecutive errors for non-terminal failed actions.
             ok = step_record["result"].get("ok", True) if isinstance(step_record["result"], dict) else True
@@ -268,11 +291,26 @@ class Agent:
             failure_reason=failure_reason if status != STATUS_PASS else None,
             verifier=verifier_out,
             run_dir=run_dir,
+            asserted_value=asserted_value,
+            assert_screenshot=assert_screenshot,
             trace=trace,
         )
 
         with open(os.path.join(run_dir, "run.json"), "w", encoding="utf-8") as fh:
             json.dump(asdict(run_result), fh, indent=2)
+
+        self.reporter.emit(
+            "run_end",
+            {
+                "status": status,
+                "verdict": verdict,
+                "reason": reason,
+                "steps_taken": steps_taken,
+                "latency_seconds": run_result.latency_seconds,
+                "asserted_value": asserted_value,
+                "verifier": verifier_out,
+            },
+        )
 
         self._log(
             f"\n--- RESULT: {status.upper()} in {steps_taken} steps, "
@@ -378,6 +416,14 @@ def run_goal(
     device = Device(settings)
     device.connect()
     try:
+        if settings.login_flow:
+            from login import perform_login
+
+            lr = perform_login(device, settings, verbose)
+            if verbose:
+                print(f"login ({settings.login_flow}): {'ok' if lr.ok else 'FAILED'} - {lr.detail}")
+            if not lr.ok:
+                raise SystemExit(f"Login failed: {lr.detail}")
         agent = Agent(prompt, settings, vlm, device, verbose=verbose)
         return agent.run(goal, web_value)
     finally:

@@ -48,8 +48,10 @@ def verify(
         }
 
     # Normalize the shape so downstream code can rely on the keys.
+    # rendering_broken is Phase 1 (absent in Phase 0 output -> defaults to False).
     return {
         "result": str(result.get("result", "inconclusive")),
+        "rendering_broken": bool(result.get("rendering_broken", False)),
         "confidence": float(result.get("confidence", 0.0) or 0.0),
         "explanation": str(result.get("explanation", "")),
     }

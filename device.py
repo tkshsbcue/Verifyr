@@ -282,6 +282,37 @@ class Device:
         except WebDriverException as err:
             return ActionResult(False, f"back failed: {err}", ERR_EXECUTOR)
 
+    def relaunch_app(self, package: str | None = None) -> ActionResult:
+        """Stale-retry action: terminate and relaunch the app under test."""
+        pkg = package or self.settings.app_package
+        if not pkg:
+            return ActionResult(False, "no package to relaunch", ERR_EXECUTOR)
+        try:
+            self.driver.terminate_app(pkg)
+            self.driver.activate_app(pkg)
+            return ActionResult(True, f"relaunched {pkg}")
+        except WebDriverException as err:
+            return ActionResult(False, f"relaunch failed: {err}", ERR_EXECUTOR)
+
+    def pull_to_refresh(self) -> ActionResult:
+        """Stale-retry action: swipe down from near the top to trigger a refresh."""
+        w, h = self.window_size()
+        try:
+            self.driver.execute_script(
+                "mobile: swipeGesture",
+                {
+                    "left": int(w * 0.5) - 5,
+                    "top": int(h * 0.25),
+                    "width": 10,
+                    "height": int(h * 0.5),
+                    "direction": "down",
+                    "percent": 0.9,
+                },
+            )
+            return ActionResult(True, "pull to refresh")
+        except WebDriverException as err:
+            return ActionResult(False, f"pull_to_refresh failed: {err}", ERR_EXECUTOR)
+
     def wait(self, seconds: Any, reason: str = "") -> ActionResult:
         try:
             secs = float(seconds) if seconds is not None else 1.0

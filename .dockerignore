@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+*.db
+.env
+runs/
+web/node_modules/
+web/dist/
+.git/
+idea/

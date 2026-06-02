@@ -1,4 +1,4 @@
-# Verifyr — Phase 0
+# Verifyr
 
 An autonomous mobile QA agent that drives a single Android app on a local
 emulator using a vision-language model. It reads each screen (screenshot +
@@ -6,8 +6,23 @@ accessibility tree), decides one action at a time, and can verify on-screen
 values against a source-of-truth ("web") value. It's an experiment to measure
 agent reliability, so logging and the eval harness are first-class.
 
-The agent's behavior is defined entirely by `prompt.json` (located at
-`idea/prompt0.json`) — its schema is the contract.
+The agent's behavior is defined by the prompt JSON in `idea/` — its schema is the
+contract.
+
+## Documentation
+
+| Doc | What |
+|-----|------|
+| [docs/RUNNING_phase_0.md](docs/RUNNING_phase_0.md) | run the CLI agent + eval harness end-to-end |
+| [docs/PHASE1.md](docs/PHASE1.md) | the parity checker (web ↔ API ↔ app + classifier) |
+| [docs/GUI.md](docs/GUI.md) | the web dashboard (FastAPI + React): manage, run, schedule, history |
+
+**CLI** (Phase 0/1): `python agent.py --goal "..."`, `python parity.py --check "..."`.
+**Dashboard**: `uvicorn server.main:app` + `cd web && npm run dev` — see docs/GUI.md.
+
+---
+
+## Phase 0 — the agent loop
 
 ## Architecture
 

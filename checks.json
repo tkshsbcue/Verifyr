@@ -1,0 +1,49 @@
+{
+  "_about": "Phase 1 parity checks. Each check compares a source-of-truth WEB value (or VLM-extracted value) against the app's backend API and/or what the app actually renders. The classifier explains WHY a check passed or failed. Edit these for your app: set real web.url/selector, api.endpoint/json_path, and app_targets[].goal/label.",
+  "checks": [
+    {
+      "name": "BTC price (demo: public API)",
+      "web": {
+        "url": "https://www.coingecko.com/en/coins/bitcoin",
+        "selector": "[data-coin-symbol] [data-price-target='price']",
+        "target_description": "current Bitcoin price in USD"
+      },
+      "api": {
+        "endpoint": "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd",
+        "json_path": "bitcoin.usd",
+        "headers": {}
+      },
+      "app_targets": [
+        {
+          "platform": "android",
+          "package": "com.empirecrypto.mobile",
+          "goal": "Navigate to the markets or prices screen and read the current Bitcoin (BTC) price",
+          "label": "BTC price",
+          "requires_build": null
+        }
+      ]
+    },
+    {
+      "name": "App version (smoke check)",
+      "web": {
+        "url": "",
+        "selector": null,
+        "target_description": null
+      },
+      "api": {
+        "endpoint": null,
+        "json_path": null,
+        "headers": {}
+      },
+      "app_targets": [
+        {
+          "platform": "android",
+          "package": "com.empirecrypto.mobile",
+          "goal": "Open the app's Settings or About screen and read the app version number",
+          "label": "app version",
+          "requires_build": null
+        }
+      ]
+    }
+  ]
+}

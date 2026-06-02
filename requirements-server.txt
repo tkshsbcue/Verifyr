@@ -1,0 +1,11 @@
+# Verifyr server (GUI backend) dependencies — install on top of requirements.txt
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+SQLAlchemy>=2.0.0
+pydantic[email]>=2.6.0
+bcrypt>=4.1.0
+PyJWT>=2.8.0
+APScheduler>=3.10.0
+python-multipart>=0.0.9
+psycopg[binary]>=3.1.0          # Postgres driver (for DATABASE_URL=postgresql+psycopg://...)
+pyaxmlparser>=0.3.30            # parse APK package/version/label without the Android SDK

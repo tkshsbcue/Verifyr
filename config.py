@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -32,14 +33,36 @@ _LINE_ARRAY_FIELDS = (
 )
 
 # Where we look for the prompt config, in order, unless PROMPT_CONFIG is set.
-_PROMPT_CANDIDATES = ("prompt.json", "prompt0.json", "idea/prompt0.json")
+# Phase 1 (prompt1) supersedes Phase 0 and carries all of its fields, so prefer it.
+_PROMPT_CANDIDATES = (
+    "prompt1.json",
+    "idea/prompt1.json",
+    "prompt.json",
+    "prompt0.json",
+    "idea/prompt0.json",
+)
+
+# Phase 1 annotates carried/new sections with marker lines that must not be sent
+# to the model, e.g. "CARRIED FROM PHASE 0." or "NEW IN PHASE 1. <real guidance>".
+_ANNOTATION_RE = re.compile(r"^(?:CARRIED FROM PHASE 0|NEW IN PHASE 1)\.\s*")
 
 
 def _join_lines(value: Any) -> str:
-    """Join a list-of-lines field into a single newline-delimited string."""
-    if isinstance(value, list):
-        return "\n".join(str(line) for line in value)
-    return str(value)
+    """Join a list-of-lines field into a single newline-delimited string.
+
+    Strips Phase 1 annotation markers: a line that is *only* a marker is dropped;
+    a line that begins with a marker keeps the remaining text.
+    """
+    if not isinstance(value, list):
+        return str(value)
+    out: list[str] = []
+    for line in value:
+        s = str(line)
+        stripped = _ANNOTATION_RE.sub("", s)
+        if stripped != s and stripped.strip() == "":
+            continue  # the line was just a marker
+        out.append(stripped)
+    return "\n".join(out)
 
 
 def _resolve_prompt_path() -> str:
@@ -72,6 +95,19 @@ class PromptConfig:
     verifier_system_prompt: str
     verifier_input_template: str
     action_space: dict
+    # Phase 1 additions (empty string / defaults when running a Phase 0 file).
+    web_extractor_system_prompt: str = ""
+    web_extractor_input_template: str = ""
+    classifier_system_prompt: str = ""
+    classifier_input_template: str = ""
+    api_check_first: bool = False
+    escalate_to_device: bool = True
+    retry_on_stale: bool = False
+    stale_retry_actions: list = field(default_factory=list)
+
+    @property
+    def is_phase1(self) -> bool:
+        return bool(self.classifier_system_prompt)
 
     @classmethod
     def load(cls, path: str | None = None) -> "PromptConfig":
@@ -97,6 +133,14 @@ class PromptConfig:
             verifier_system_prompt=_join_lines(raw["verifier_system_prompt"]),
             verifier_input_template=_join_lines(raw["verifier_input_template"]),
             action_space=raw["action_space"],
+            web_extractor_system_prompt=_join_lines(raw.get("web_extractor_system_prompt", [])),
+            web_extractor_input_template=_join_lines(raw.get("web_extractor_input_template", [])),
+            classifier_system_prompt=_join_lines(raw.get("classifier_system_prompt", [])),
+            classifier_input_template=_join_lines(raw.get("classifier_input_template", [])),
+            api_check_first=bool(cfg.get("api_check_first", False)),
+            escalate_to_device=bool(cfg.get("escalate_to_device", True)),
+            retry_on_stale=bool(cfg.get("retry_on_stale", False)),
+            stale_retry_actions=list(cfg.get("stale_retry_actions", [])),
         )
 
 
@@ -135,6 +179,11 @@ class Settings:
     app_activity: str | None = None
     app_path: str | None = None
 
+    # Login automation (runs as a deterministic pre-step before the agent goal)
+    login_flow: str | None = None          # e.g. "dev_impersonate"; None = no login
+    impersonate_key: str | None = None     # secret, read from env, never sent to the model
+    impersonate_user: str | None = None    # which user to pick; None = first in the list
+
     # Artifacts
     runs_dir: str = "runs"
 
@@ -160,6 +209,9 @@ class Settings:
             app_package=os.environ.get("APP_PACKAGE"),
             app_activity=os.environ.get("APP_ACTIVITY"),
             app_path=os.environ.get("APP_PATH"),
+            login_flow=os.environ.get("LOGIN_FLOW"),
+            impersonate_key=os.environ.get("IMPERSONATE_KEY"),
+            impersonate_user=os.environ.get("IMPERSONATE_USER"),
             runs_dir=os.environ.get("RUNS_DIR", "runs"),
         )
 
