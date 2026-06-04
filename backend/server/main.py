@@ -47,10 +47,10 @@ def _startup() -> None:
 
     from verifyr.config import PROJECT_ROOT
 
-    # Serve run artifacts (screenshots) so the UI can show them.
+    # Run screenshots are served per-user through GET /api/runs/{id}/artifact
+    # (ownership-checked) — not via an open static mount.
     runs_dir = os.environ.get("RUNS_DIR", str(PROJECT_ROOT / "runs"))
     os.makedirs(runs_dir, exist_ok=True)
-    app.mount("/artifacts", StaticFiles(directory=runs_dir), name="artifacts")
 
     # Serve the built frontend if present (frontend/dist). API routes are registered
     # first, so this catch-all only handles non-API paths.

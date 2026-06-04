@@ -1,16 +1,15 @@
-// Thin API client for the Verifyr backend. Token stored in localStorage.
+// Thin API client for the Verifyr backend. The bearer token is the Supabase
+// access token, kept in sync by the AuthProvider via setAccessToken().
 
 const BASE: string = (import.meta as any).env?.VITE_API_BASE ?? "";
 
-let token: string | null = localStorage.getItem("verifyr_token");
+let accessToken: string | null = null;
 
-export function getToken() {
-  return token;
+export function setAccessToken(t: string | null) {
+  accessToken = t;
 }
-export function setToken(t: string | null) {
-  token = t;
-  if (t) localStorage.setItem("verifyr_token", t);
-  else localStorage.removeItem("verifyr_token");
+export function getAccessToken() {
+  return accessToken;
 }
 
 async function req(path: string, opts: RequestInit = {}): Promise<any> {
@@ -18,10 +17,9 @@ async function req(path: string, opts: RequestInit = {}): Promise<any> {
     "Content-Type": "application/json",
     ...((opts.headers as Record<string, string>) || {}),
   };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
   const res = await fetch(BASE + path, { ...opts, headers });
   if (res.status === 401) {
-    setToken(null);
     throw new Error("unauthorized");
   }
   if (!res.ok) {
@@ -39,18 +37,6 @@ async function req(path: string, opts: RequestInit = {}): Promise<any> {
 }
 
 export const api = {
-  register: (email: string, password: string) =>
-    req("/api/auth/register", { method: "POST", body: JSON.stringify({ email, password }) }),
-  login: async (email: string, password: string) => {
-    const body = new URLSearchParams({ username: email, password });
-    const res = await fetch(BASE + "/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
-    if (!res.ok) throw new Error("Incorrect email or password");
-    return res.json();
-  },
   me: () => req("/api/auth/me"),
   listChecks: () => req("/api/checks"),
   getCheck: (id: number) => req(`/api/checks/${id}`),
@@ -66,7 +52,7 @@ export const api = {
     return new Promise<any>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", BASE + "/api/apks");
-      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      if (accessToken) xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
       };
@@ -93,10 +79,14 @@ export function streamUrl(runId: number): string {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const httpBase = BASE || `${location.protocol}//${location.host}`;
   const wsBase = httpBase.replace(/^http/, proto === "wss" ? "wss" : "ws");
-  return `${wsBase}/api/runs/${runId}/stream?token=${encodeURIComponent(token || "")}`;
+  return `${wsBase}/api/runs/${runId}/stream?token=${encodeURIComponent(accessToken || "")}`;
 }
 
+// Screenshots are served by an ownership-checked proxy that takes the token as a
+// query param (an <img> can't send an Authorization header).
 export function artifact(url: string | null): string | null {
   if (!url) return null;
-  return BASE + url;
+  const sep = url.includes("?") ? "&" : "?";
+  const auth = accessToken ? `${sep}token=${encodeURIComponent(accessToken)}` : "";
+  return BASE + url + auth;
 }

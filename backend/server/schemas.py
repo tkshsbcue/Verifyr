@@ -5,27 +5,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 # ---- auth ----
-class UserCreate(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=6)
-
-
+# Credentials (sign-up / sign-in) are handled by Supabase Auth on the client.
+# The backend only echoes the authenticated identity.
 class UserOut(BaseModel):
-    id: int
-    email: EmailStr
-    is_active: bool
-
-    class Config:
-        from_attributes = True
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+    id: str
+    email: str | None = None
 
 
 # ---- check config ----

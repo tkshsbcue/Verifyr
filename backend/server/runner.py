@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from verifyr import parity
 from verifyr.checks import Check as EngineCheck
@@ -16,9 +17,10 @@ from verifyr.config import load_all
 from verifyr.reporting import CallbackReporter
 from verifyr.vlm import get_vlm
 
+from . import supabase_client
 from .db import SessionLocal
 from .events import bus
-from .models import Apk, Run
+from .models import Apk, Check, Run
 from .settings import server_settings
 
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="verifyr-run")
@@ -29,8 +31,19 @@ def _utcnow() -> datetime:
 
 
 def enqueue_run(db, check_id: int, trigger: str = "manual") -> Run:
-    """Create a queued Run row and submit it to the worker. Returns the Run."""
-    run = Run(check_id=check_id, status="queued", trigger=trigger, steps=[])
+    """Create a queued Run row and submit it to the worker. Returns the Run.
+
+    The run inherits the owning check's user_id so scheduled runs (which have no
+    request context) stay attributed to the right user.
+    """
+    check = db.get(Check, check_id)
+    run = Run(
+        check_id=check_id,
+        user_id=check.user_id if check else None,
+        status="queued",
+        trigger=trigger,
+        steps=[],
+    )
     db.add(run)
     db.commit()
     db.refresh(run)
@@ -38,9 +51,10 @@ def enqueue_run(db, check_id: int, trigger: str = "manual") -> Run:
     return run
 
 
-def enqueue_quick_run(db, apk_id: int, goal: str, name: str | None, web: dict) -> Run:
+def enqueue_quick_run(db, apk_id: int, goal: str, name: str | None, web: dict, user_id: str) -> Run:
     """Create an ad-hoc 'quick test' run: an uploaded APK + a typed prompt."""
     run = Run(
+        user_id=user_id,
         apk_id=apk_id,
         goal=goal,
         name=name or "Quick test",
@@ -56,14 +70,24 @@ def enqueue_quick_run(db, apk_id: int, goal: str, name: str | None, web: dict) -
     return run
 
 
-def _artifact_url(path: str | None, runs_dir: str) -> str | None:
-    if not path:
+def _artifact_url(path: str | None, out_dir: str, run_id: int, user_id: str) -> str | None:
+    """Mirror a screenshot to per-user Supabase Storage and return a stable,
+    ownership-checked proxy URL (served by GET /api/runs/{id}/artifact)."""
+    if not path or not out_dir:
         return None
     try:
-        rel = os.path.relpath(path, runs_dir)
+        rel = os.path.relpath(path, out_dir)
     except ValueError:
         return None
-    return f"/artifacts/{rel}"
+    if rel.startswith(".."):
+        return None
+    # Best-effort upload; the proxy falls back to the local copy if it fails.
+    try:
+        with open(path, "rb") as fh:
+            supabase_client.upload_artifact(f"{user_id}/{run_id}/{rel}", fh.read())
+    except OSError:
+        pass
+    return f"/api/runs/{run_id}/artifact?file={quote(rel)}"
 
 
 def _execute(run_id: int) -> None:
@@ -75,6 +99,7 @@ def _execute(run_id: int) -> None:
 
     check_name = run.check.name
     check_config = dict(run.check.config or {})
+    user_id = run.user_id
     run.status = "running"
     db.commit()
     bus.publish_threadsafe(run_id, {"type": "status", "status": "running"})
@@ -85,10 +110,15 @@ def _execute(run_id: int) -> None:
         prompt, settings = load_all()
         runs_dir = settings.runs_dir
 
+        out_dir = os.path.join(runs_dir, f"server-run-{run_id}")
+        os.makedirs(out_dir, exist_ok=True)
+        run.out_dir = out_dir
+        db.commit()
+
         def on_event(kind: str, data: dict) -> None:
             payload = {"type": kind, **data}
             if "screenshot" in payload:
-                payload["screenshot_url"] = _artifact_url(payload.get("screenshot"), runs_dir)
+                payload["screenshot_url"] = _artifact_url(payload.get("screenshot"), out_dir, run_id, user_id)
             if kind == "step":
                 steps.append(payload)
                 run.steps = list(steps)
@@ -98,11 +128,6 @@ def _execute(run_id: int) -> None:
         reporter = CallbackReporter(on_event)
         vlm = get_vlm(settings)
         engine_check = EngineCheck.from_dict({"name": check_name, **check_config})
-
-        out_dir = os.path.join(runs_dir, f"server-run-{run_id}")
-        os.makedirs(out_dir, exist_ok=True)
-        run.out_dir = out_dir
-        db.commit()
 
         result = parity.run_check(
             engine_check, prompt, settings, vlm, out_dir, verbose=False, reporter=reporter
@@ -147,6 +172,7 @@ def _execute_quick(run_id: int) -> None:
     apk = db.get(Apk, run.apk_id) if run.apk_id else None
     goal = run.goal or ""
     cfg = run.config or {}
+    user_id = run.user_id
 
     run.status = "running"
     db.commit()
@@ -167,10 +193,15 @@ def _execute_quick(run_id: int) -> None:
             login_flow=None,
         )
 
+        out_dir = os.path.join(runs_dir, f"server-run-{run_id}")
+        os.makedirs(out_dir, exist_ok=True)
+        run.out_dir = out_dir
+        db.commit()
+
         def on_event(kind: str, data: dict) -> None:
             payload = {"type": kind, **data}
             if "screenshot" in payload:
-                payload["screenshot_url"] = _artifact_url(payload.get("screenshot"), runs_dir)
+                payload["screenshot_url"] = _artifact_url(payload.get("screenshot"), out_dir, run_id, user_id)
             if kind == "step":
                 steps.append(payload)
                 run.steps = list(steps)
@@ -191,10 +222,6 @@ def _execute_quick(run_id: int) -> None:
             bus.publish_threadsafe(run_id, {"type": "signal", "name": "web_value", "value": web_value})
 
         vlm = get_vlm(settings)
-        out_dir = os.path.join(runs_dir, f"server-run-{run_id}")
-        os.makedirs(out_dir, exist_ok=True)
-        run.out_dir = out_dir
-        db.commit()
 
         device = Device(settings)
         device.connect()

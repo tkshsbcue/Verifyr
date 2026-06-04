@@ -4,6 +4,12 @@ WORKDIR /web
 COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ ./
+# Vite inlines these (public client) values at build time. Passed as build args
+# from docker-compose; see SUPABASE_URL / SUPABASE_ANON_KEY in .env.
+ARG VITE_SUPABASE_URL=""
+ARG VITE_SUPABASE_ANON_KEY=""
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 RUN npm run build
 
 # --- Stage 2: backend + engine ---

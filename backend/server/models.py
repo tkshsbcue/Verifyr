@@ -1,10 +1,16 @@
-"""ORM models: User, Check, Run."""
+"""ORM models: Check, Apk, Run — each owned by a Supabase auth user.
+
+There is no local users table: authentication is handled by Supabase Auth and
+``user_id`` holds the Supabase ``auth.users.id`` (a uuid). On Postgres the
+canonical schema (FKs to auth.users, RLS, the storage bucket) lives in the
+Supabase migrations; on SQLite (local dev) ``init_db`` creates these tables.
+"""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -14,20 +20,11 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class User(Base):
-    __tablename__ = "users"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    hashed_password: Mapped[str] = mapped_column(String(255))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-
-
 class Check(Base):
     __tablename__ = "checks"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), index=True)
     name: Mapped[str] = mapped_column(String(255), index=True)
     # config holds {web, api, app_targets} — the engine's check schema minus name.
     config: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -46,6 +43,7 @@ class Apk(Base):
     __tablename__ = "apks"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), index=True)
     filename: Mapped[str] = mapped_column(String(255))
     path: Mapped[str] = mapped_column(String(512))
     package: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -58,6 +56,7 @@ class Run(Base):
     __tablename__ = "runs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), index=True)
     # Either a saved check (parity) or an ad-hoc apk+goal (quick test).
     check_id: Mapped[int | None] = mapped_column(
         ForeignKey("checks.id", ondelete="CASCADE"), index=True, nullable=True

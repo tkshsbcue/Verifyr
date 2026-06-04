@@ -14,12 +14,16 @@ def _origins() -> list[str]:
 @dataclass
 class ServerSettings:
     database_url: str = field(default_factory=lambda: os.environ.get("DATABASE_URL", "sqlite:///./verifyr.db"))
-    jwt_secret: str = field(
-        default_factory=lambda: os.environ.get("JWT_SECRET", "dev-insecure-change-me-please-set-JWT_SECRET-32b+")
-    )
-    jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = field(default_factory=lambda: int(os.environ.get("JWT_EXPIRE_MINUTES", "1440")))
     cors_origins: list = field(default_factory=_origins)
+    # ---- Supabase (unified auth + Postgres + Storage) ----
+    # Auth tokens are verified against SUPABASE_URL; screenshots are stored in
+    # the SUPABASE_BUCKET using the service-role key (server-side only).
+    supabase_url: str = field(default_factory=lambda: os.environ.get("SUPABASE_URL", "").rstrip("/"))
+    supabase_anon_key: str = field(default_factory=lambda: os.environ.get("SUPABASE_ANON_KEY", ""))
+    supabase_service_role_key: str = field(
+        default_factory=lambda: os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    )
+    supabase_bucket: str = field(default_factory=lambda: os.environ.get("SUPABASE_BUCKET", "run-artifacts"))
     # Optional SMTP for alerts; if unset, alerts are logged + stored only.
     smtp_host: str | None = field(default_factory=lambda: os.environ.get("SMTP_HOST"))
     smtp_port: int = field(default_factory=lambda: int(os.environ.get("SMTP_PORT", "587")))
