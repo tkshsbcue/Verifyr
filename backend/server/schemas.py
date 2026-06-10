@@ -124,3 +124,14 @@ class RunOut(RunSummary):
     steps: list[Any]
     error: str | None
     out_dir: str | None
+    # Number of runs ahead of this one in the shared queue (0 = next/running,
+    # None = not queued). Computed at read time, not stored.
+    queue_position: int | None = None
+
+
+class CancelOut(BaseModel):
+    id: int
+    status: str
+    # "cancelled" (was queued, stopped now), "cancelling" (running, will stop
+    # shortly), or "noop" (already finished).
+    result: str

@@ -8,3 +8,4 @@ APScheduler>=3.10.0
 python-multipart>=0.0.9
 psycopg[binary]>=3.1.0          # Postgres driver (for DATABASE_URL=postgresql+psycopg://...)
 pyaxmlparser>=0.3.30            # parse APK package/version/label without the Android SDK
+pytest>=8.0.0                   # test suite (cd backend && python -m pytest)

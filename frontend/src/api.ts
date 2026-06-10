@@ -5,6 +5,27 @@ const BASE: string = (import.meta as any).env?.VITE_API_BASE ?? "";
 
 let accessToken: string | null = null;
 
+// Session hooks, registered by the AuthProvider. `refresh` asks Supabase for a
+// fresh access token (it auto-refreshes when possible); `onExpired` is called
+// when the session can no longer be recovered so the UI can bounce to sign-in.
+let refreshSession: (() => Promise<string | null>) | null = null;
+let onSessionExpired: (() => void) | null = null;
+
+export function setSessionHandlers(handlers: {
+  refresh: () => Promise<string | null>;
+  onExpired: () => void;
+}) {
+  refreshSession = handlers.refresh;
+  onSessionExpired = handlers.onExpired;
+}
+
+export class SessionExpiredError extends Error {
+  constructor() {
+    super("Your session has expired. Please sign in again.");
+    this.name = "SessionExpiredError";
+  }
+}
+
 export function setAccessToken(t: string | null) {
   accessToken = t;
 }
@@ -12,7 +33,7 @@ export function getAccessToken() {
   return accessToken;
 }
 
-async function req(path: string, opts: RequestInit = {}): Promise<any> {
+async function req(path: string, opts: RequestInit = {}, retried = false): Promise<any> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((opts.headers as Record<string, string>) || {}),
@@ -20,7 +41,18 @@ async function req(path: string, opts: RequestInit = {}): Promise<any> {
   if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
   const res = await fetch(BASE + path, { ...opts, headers });
   if (res.status === 401) {
-    throw new Error("unauthorized");
+    // The access token may have simply expired — try once to refresh it (via
+    // Supabase's refresh token) and replay the request transparently.
+    if (!retried && refreshSession) {
+      const fresh = await refreshSession();
+      if (fresh && fresh !== accessToken) {
+        accessToken = fresh;
+        return req(path, opts, true);
+      }
+    }
+    // Couldn't recover — the refresh token is gone/expired. Surface it.
+    onSessionExpired?.();
+    throw new SessionExpiredError();
   }
   if (!res.ok) {
     let detail = res.statusText;
@@ -46,6 +78,7 @@ export const api = {
   runCheck: (id: number) => req(`/api/checks/${id}/run`, { method: "POST" }),
   listRuns: (checkId?: number) => req("/api/runs" + (checkId ? `?check_id=${checkId}` : "")),
   getRun: (id: number) => req(`/api/runs/${id}`),
+  cancelRun: (id: number) => req(`/api/runs/${id}/cancel`, { method: "POST" }),
   // APK + quick (ad-hoc) test
   uploadApk: async (file: File, onProgress?: (pct: number) => void) => {
     // XHR so we can report upload progress for large APKs.

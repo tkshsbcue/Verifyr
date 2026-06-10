@@ -13,8 +13,8 @@ from ..db import SessionLocal, get_db
 from ..deps import current_user
 from ..events import bus
 from ..models import Apk, Run
-from ..runner import enqueue_quick_run
-from ..schemas import QuickRunCreate, RunOut, RunSummary
+from ..runner import enqueue_quick_run, queue_position, request_cancel
+from ..schemas import CancelOut, QuickRunCreate, RunOut, RunSummary
 from ..supabase_client import SupaUser, signed_url, verify_token
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
@@ -64,7 +64,18 @@ def list_runs(
 
 @router.get("/{run_id}", response_model=RunOut)
 def get_run(run_id: int, db: Session = Depends(get_db), user: SupaUser = Depends(current_user)):
-    return _owned_run(db, run_id, user.id)
+    run = _owned_run(db, run_id, user.id)
+    out = RunOut.model_validate(run)
+    out.queue_position = queue_position(db, run_id)
+    return out
+
+
+@router.post("/{run_id}/cancel", response_model=CancelOut)
+def cancel_run(run_id: int, db: Session = Depends(get_db), user: SupaUser = Depends(current_user)):
+    run = _owned_run(db, run_id, user.id)
+    result = request_cancel(db, run)
+    db.refresh(run)
+    return CancelOut(id=run.id, status=run.status, result=result)
 
 
 @router.get("/{run_id}/artifact")
@@ -126,9 +137,15 @@ async def stream(websocket: WebSocket, run_id: int, token: str | None = Query(No
             await websocket.close()
             return
         await websocket.send_json(
-            {"type": "snapshot", "status": run.status, "verdict": run.verdict, "steps": run.steps or []}
+            {
+                "type": "snapshot",
+                "status": run.status,
+                "verdict": run.verdict,
+                "steps": run.steps or [],
+                "queue_position": queue_position(db, run_id),
+            }
         )
-        already_done = run.status in ("done", "error")
+        already_done = run.status in ("done", "error", "cancelled")
     finally:
         db.close()
 

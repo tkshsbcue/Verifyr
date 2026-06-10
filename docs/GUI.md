@@ -33,12 +33,12 @@ Browser (React) ──Supabase Auth──> Supabase  (sign in → access token)
 | `server/supabase_client.py`, `server/deps.py` | Supabase token verification + Storage; `current_user` dependency |
 | `server/routers/auth.py` | `GET /me` (sign-up / sign-in happen on the client via Supabase) |
 | `server/routers/checks.py` | checks CRUD + `POST /{id}/run` (scoped per-user) |
-| `server/routers/runs.py` | run list/detail, `GET /{id}/artifact` (ownership-checked screenshots), `WS /{id}/stream` |
+| `server/routers/runs.py` | run list/detail, `POST /{id}/cancel`, `GET /{id}/artifact` (ownership-checked screenshots), `WS /{id}/stream` |
 | `server/runner.py` | threaded runner → engine via `CallbackReporter`; persists, streams, mirrors screenshots to Storage |
 | `server/scheduler.py` | APScheduler cron jobs from each check's `schedule` |
 | `server/seed.py` | import `checks.json` for a Supabase user |
 | `reporting.py` | `Reporter` hook the engine emits events through (repo root) |
-| `frontend/src/auth.tsx`, `frontend/src/supabase.ts` | `AuthProvider` + Supabase client (frontend auth state) |
+| `frontend/src/auth.tsx`, `frontend/src/supabase.ts` | `AuthProvider` + Supabase client; keeps the bearer token synced, and on a `401` refreshes the token and replays the request once, bouncing to a "session expired" sign-in only if that fails |
 
 ## Run with Docker (easiest)
 
@@ -117,6 +117,22 @@ uvicorn server.main:app --host 0.0.0.0 --port 8000
 # open http://localhost:8000
 ```
 
+## Tests
+
+Backend tests use `pytest` against an isolated SQLite DB with auth stubbed and the
+run worker replaced (no device needed):
+
+```bash
+cd backend && source ../.venv/bin/activate
+pip install -r requirements-server.txt   # includes pytest
+python -m pytest
+```
+
+Coverage: engine pure logic (version comparison, `json_path` extraction, the
+checks schema, parity value-matching) and the API (per-user ownership scoping for
+checks/runs, run triggering, queue position, cancellation, and the artifact
+proxy's path-traversal/auth guards).
+
 ## Using it
 
 ### Quick test (primary flow)
@@ -135,6 +151,10 @@ and the verdict stream in, and the run is saved under "Recent quick tests".
 - **Checks** (left): create/edit/delete; each shows its last verdict.
 - **Run now**: triggers a run; the **live panel** streams agent steps + screenshots,
   the parity signals (web / api / app / verifier), and the final verdict.
+- **Cancel / queue**: while a run is queued or running, the live panel shows its
+  position in the shared queue (one device = one worker) and a **Cancel** button.
+  Cancelling a queued run stops it immediately; a running run stops cleanly at the
+  agent's next step (`POST /api/runs/{id}/cancel`).
 - **History**: every run per check; click one to replay its steps and verdict.
 - **Schedule**: set a cron expression (e.g. `*/30 * * * *`) to run automatically.
 - **Alerts**: set an alert email; on a *regression* to a non-`pass` verdict the

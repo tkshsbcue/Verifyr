@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../supabase";
 
-export default function Login() {
+export default function Login({ expired = false }: { expired?: boolean }) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,6 +42,11 @@ export default function Login() {
           Verif<span style={{ color: "var(--accent)" }}>yr</span>
         </div>
         <div className="muted" style={{ marginBottom: 14 }}>Web-to-mobile parity dashboard</div>
+        {expired && !error && (
+          <div className="error" style={{ marginBottom: 12 }}>
+            Your session expired. Please sign in again.
+          </div>
+        )}
         <label>Email</label>
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <label>Password</label>

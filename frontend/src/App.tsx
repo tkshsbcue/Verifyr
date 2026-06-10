@@ -7,10 +7,10 @@ import QuickTest from "./components/QuickTest";
 import RunLive, { verdictClass } from "./components/RunLive";
 
 export default function App() {
-  const { session, email, loading, signOut } = useAuth();
+  const { session, email, loading, expired, signOut } = useAuth();
 
   if (loading) return <div className="center muted">Loading…</div>;
-  if (!session) return <Login />;
+  if (!session) return <Login expired={expired} />;
 
   return <Dashboard email={email ?? ""} onLogout={signOut} />;
 }

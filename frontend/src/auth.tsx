@@ -3,12 +3,15 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
-import { setAccessToken } from "./api";
+import { setAccessToken, setSessionHandlers } from "./api";
 
 type AuthState = {
   session: Session | null;
   email: string | null;
   loading: boolean;
+  // Set when an API call found the session unrecoverable (refresh token gone),
+  // so the sign-in screen can explain why the user was bounced.
+  expired: boolean;
   signOut: () => Promise<void>;
 };
 
@@ -16,15 +19,32 @@ const AuthContext = createContext<AuthState>({
   session: null,
   email: null,
   loading: true,
+  expired: false,
   signOut: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
     let active = true;
+
+    // Let the API client recover from an expired access token (refresh + retry)
+    // and tell us when the session is truly gone.
+    setSessionHandlers({
+      refresh: async () => {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token ?? null;
+        setAccessToken(token);
+        return token;
+      },
+      onExpired: () => {
+        setExpired(true);
+        supabase.auth.signOut();
+      },
+    });
 
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
@@ -38,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next);
       setAccessToken(next?.access_token ?? null);
+      if (next) setExpired(false); // a fresh session clears the expiry notice
     });
 
     return () => {
@@ -50,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     email: session?.user?.email ?? null,
     loading,
+    expired,
     signOut: async () => {
       await supabase.auth.signOut();
     },

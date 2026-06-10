@@ -24,13 +24,21 @@ import json
 import os
 import time
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from .config import PromptConfig, Settings, load_all
 from .device import Device, DeviceError, ERR_ELEMENT_NOT_FOUND
 from .reporting import Reporter
 from .verifier import resolve_web_value, verify
 from .vlm import VLMClient, VLMError, get_vlm
+
+
+class RunCancelled(Exception):
+    """Raised cooperatively when a run is cancelled mid-flight.
+
+    The agent loop checks ``should_cancel`` between steps and raises this so the
+    server runner can distinguish a deliberate cancellation from an error.
+    """
 
 # Outcome statuses recorded in run.json / used by the eval harness.
 STATUS_PASS = "pass"
@@ -106,6 +114,7 @@ class Agent:
         max_consecutive_errors: int = 3,
         verbose: bool = True,
         reporter: Reporter | None = None,
+        should_cancel: Callable[[], bool] | None = None,
     ):
         self.prompt = prompt
         self.settings = settings
@@ -115,6 +124,8 @@ class Agent:
         self.max_consecutive_errors = max_consecutive_errors
         self.verbose = verbose
         self.reporter = reporter or Reporter()
+        # Optional cooperative-cancellation predicate, checked once per step.
+        self.should_cancel = should_cancel
 
     def _log(self, msg: str) -> None:
         if self.verbose:
@@ -146,6 +157,9 @@ class Agent:
         self.reporter.emit("run_start", {"goal": goal, "max_steps": max_steps, "run_dir": run_dir})
 
         for step in range(1, max_steps + 1):
+            # Cooperative cancellation: stop cleanly between steps when asked.
+            if self.should_cancel and self.should_cancel():
+                raise RunCancelled(f"cancelled at step {step}")
             step_record: dict[str, Any] = {"step": step}
             try:
                 screenshot_b64 = self.device.screenshot_b64()
