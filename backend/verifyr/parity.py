@@ -26,7 +26,7 @@ import json
 import os
 import re
 
-from .agent import Agent
+from .agent import Agent, RunCancelled
 from .api_check import fetch_api_value
 from .buildinfo import installed_build, version_lt
 from .checks import Check, get_check, load_checks
@@ -66,12 +66,17 @@ def run_check(
     out_dir: str,
     verbose: bool = True,
     reporter: Reporter | None = None,
+    should_cancel=None,
 ) -> dict:
     reporter = reporter or Reporter()
 
     def log(msg: str) -> None:
         if verbose:
             print(msg, flush=True)
+
+    def _check_cancel() -> None:
+        if should_cancel and should_cancel():
+            raise RunCancelled("cancelled before device phase")
 
     log(f"\n========== CHECK: {check.name} ==========")
     target = check.android_target()
@@ -122,6 +127,7 @@ def run_check(
 
     # --- 4. device capture (+ stale retry) ---
     if drive_device:
+        _check_cancel()
         target_settings = dataclasses.replace(
             settings, app_package=target.package or settings.app_package, app_path=None
         )
@@ -145,7 +151,10 @@ def run_check(
                     detail["notes"]["login"] = lr.detail
                     log(f"[login] {'ok' if lr.ok else 'FAILED'} - {lr.detail}")
 
-                agent = Agent(prompt, target_settings, vlm, device, verbose=verbose, reporter=reporter)
+                agent = Agent(
+                    prompt, target_settings, vlm, device,
+                    verbose=verbose, reporter=reporter, should_cancel=should_cancel,
+                )
                 run = agent.run(target.goal, web_value, run_root=os.path.join(out_dir, "agent-1"))
                 signals["app_ui_value"] = run.asserted_value
                 if run.verifier:

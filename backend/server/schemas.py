@@ -5,27 +5,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 # ---- auth ----
-class UserCreate(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=6)
-
-
+# Credentials (sign-up / sign-in) are handled by Supabase Auth on the client.
+# The backend only echoes the authenticated identity.
 class UserOut(BaseModel):
-    id: int
-    email: EmailStr
-    is_active: bool
-
-    class Config:
-        from_attributes = True
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+    id: str
+    email: str | None = None
 
 
 # ---- check config ----
@@ -136,3 +124,14 @@ class RunOut(RunSummary):
     steps: list[Any]
     error: str | None
     out_dir: str | None
+    # Number of runs ahead of this one in the shared queue (0 = next/running,
+    # None = not queued). Computed at read time, not stored.
+    queue_position: int | None = None
+
+
+class CancelOut(BaseModel):
+    id: int
+    status: str
+    # "cancelled" (was queued, stopped now), "cancelling" (running, will stop
+    # shortly), or "noop" (already finished).
+    result: str

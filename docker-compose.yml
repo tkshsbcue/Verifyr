@@ -1,11 +1,11 @@
 # Verifyr — one-command run.
 #
-#   cp .env.example .env      # set OPENAI_API_KEY (+ JWT_SECRET, ADMIN_*)
+#   cp .env.example .env      # set OPENAI_API_KEY + SUPABASE_* (+ DATABASE_URL)
 #   docker compose up --build
-#   open http://localhost:8000
+#   open http://localhost:8000  (sign up via Supabase Auth in the web UI)
 #
-# The app container is self-contained (SQLite on a named volume, built frontend
-# served at /). It still needs an Appium + Android emulator to drive apps:
+# Auth, data, and screenshots live in Supabase. The container still needs an
+# Appium + Android emulator to drive apps:
 #   • macOS / Windows: run the emulator + Appium on your host; the default
 #     APPIUM_SERVER_URL=http://host.docker.internal:4723 reaches it.
 #   • Linux with /dev/kvm: bring up the bundled emulator too:
@@ -14,21 +14,30 @@
 
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        # Baked into the frontend bundle at build time (public client values).
+        VITE_SUPABASE_URL: ${SUPABASE_URL:-}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
     env_file: [.env]
     environment:
-      # Self-contained persistence on the named volume (no external DB needed).
+      # Data lives in Supabase Postgres; the named volume only holds run
+      # artifacts + uploaded APKs (local copies; screenshots also go to Storage).
       DATABASE_URL: ${DATABASE_URL:-sqlite:////data/verifyr.db}
       RUNS_DIR: /data/runs
       UPLOAD_DIR: /data/uploads
-      JWT_SECRET: ${JWT_SECRET:-change-me-please-set-a-32-byte-secret}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      SUPABASE_BUCKET: ${SUPABASE_BUCKET:-run-artifacts}
       APPIUM_SERVER_URL: ${APPIUM_SERVER_URL:-http://host.docker.internal:4723}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8000}
       # The container can't launch a host emulator; let Appium's host manage it.
       AUTO_START_EMULATOR: ${AUTO_START_EMULATOR:-false}
-      # If both set, an admin user is created on first boot.
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Optionally import sample checks for an existing Supabase user on boot.
+      SEED_CHECKS: ${SEED_CHECKS:-}
+      SEED_USER_ID: ${SEED_USER_ID:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"   # lets Linux reach a host-run Appium
     ports:

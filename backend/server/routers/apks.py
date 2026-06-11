@@ -11,8 +11,9 @@ from verifyr.config import PROJECT_ROOT
 
 from ..db import get_db
 from ..deps import current_user
-from ..models import Apk, User
+from ..models import Apk
 from ..schemas import ApkOut
+from ..supabase_client import SupaUser
 
 router = APIRouter(prefix="/api/apks", tags=["apks"])
 
@@ -41,12 +42,15 @@ def _parse_apk(path: str) -> dict:
 
 @router.post("", response_model=ApkOut, status_code=201)
 async def upload_apk(
-    file: UploadFile = File(...), db: Session = Depends(get_db), _: User = Depends(current_user)
+    file: UploadFile = File(...), db: Session = Depends(get_db), user: SupaUser = Depends(current_user)
 ):
     if not (file.filename or "").lower().endswith(".apk"):
         raise HTTPException(400, "Expected a .apk file")
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-    dest = os.path.join(UPLOAD_DIR, file.filename)
+    # Namespace the stored file per user so two users uploading the same
+    # filename don't clobber each other.
+    dest = os.path.join(UPLOAD_DIR, user.id, file.filename)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
     size = 0
     with open(dest, "wb") as fh:
         while chunk := await file.read(1 << 20):
@@ -57,6 +61,7 @@ async def upload_apk(
 
     info = _parse_apk(dest)
     apk = Apk(
+        user_id=user.id,
         filename=file.filename,
         path=os.path.abspath(dest),
         package=info["package"],
@@ -70,5 +75,5 @@ async def upload_apk(
 
 
 @router.get("", response_model=list[ApkOut])
-def list_apks(db: Session = Depends(get_db), _: User = Depends(current_user)):
-    return db.query(Apk).order_by(Apk.id.desc()).all()
+def list_apks(db: Session = Depends(get_db), user: SupaUser = Depends(current_user)):
+    return db.query(Apk).filter(Apk.user_id == user.id).order_by(Apk.id.desc()).all()

@@ -4,6 +4,7 @@ idea/
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # Secrets & artifacts
 .env
@@ -15,3 +16,5 @@ frontend/node_modules/
 frontend/dist/
 uploads/
 frontend/*.tsbuildinfo
+frontend/.env
+frontend/.env.local

@@ -16,6 +16,8 @@ export default function RunLive({ runId }: { runId: number }) {
   const [signals, setSignals] = useState<any>(null);
   const [verdict, setVerdict] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [queuePos, setQueuePos] = useState<number | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -23,6 +25,8 @@ export default function RunLive({ runId }: { runId: number }) {
     setSignals(null);
     setVerdict(null);
     setError(null);
+    setQueuePos(null);
+    setCancelling(false);
     setStatus("connecting");
 
     // Seed from the stored run (fills signals/summary for completed runs).
@@ -32,11 +36,12 @@ export default function RunLive({ runId }: { runId: number }) {
       if (r.signals) setSignals(r.signals);
       if (r.verdict) setVerdict({ verdict: r.verdict, summary: r.summary, recommended_action: r.recommended_action });
       if (r.error) setError(r.error);
+      if (r.queue_position != null) setQueuePos(r.queue_position);
     }).catch(() => {});
 
     const ws = new WebSocket(streamUrl(runId));
     wsRef.current = ws;
-    ws.onopen = () => setStatus("running");
+    ws.onopen = () => setStatus((s) => (s === "connecting" ? "running" : s));
     ws.onmessage = (ev) => {
       const m = JSON.parse(ev.data);
       switch (m.type) {
@@ -44,9 +49,11 @@ export default function RunLive({ runId }: { runId: number }) {
           setStatus(m.status);
           if (m.steps?.length) setSteps(m.steps);
           if (m.verdict) setVerdict({ verdict: m.verdict });
+          if (m.queue_position != null) setQueuePos(m.queue_position);
           break;
         case "status":
           setStatus(m.status);
+          if (m.status === "running") setQueuePos(null);
           break;
         case "step":
           setSteps((s) => [...s, m]);
@@ -63,6 +70,8 @@ export default function RunLive({ runId }: { runId: number }) {
         case "done":
           setStatus(m.status);
           if (m.error) setError(m.error);
+          setQueuePos(null);
+          setCancelling(false);
           break;
       }
     };
@@ -71,13 +80,37 @@ export default function RunLive({ runId }: { runId: number }) {
   }, [runId]);
 
   const running = status === "running" || status === "connecting" || status === "queued";
+  const cancellable = status === "running" || status === "queued";
+
+  async function cancel() {
+    setCancelling(true);
+    try {
+      const r = await api.cancelRun(runId);
+      // "cancelled" finalizes immediately; "cancelling" waits for the next step.
+      if (r.result === "cancelled" || r.status === "cancelled") setStatus("cancelled");
+    } catch {
+      setCancelling(false);
+    }
+  }
 
   return (
     <div>
       <div className="card">
         <div className="row spread">
           <h2 style={{ margin: 0 }}>Live run #{runId}</h2>
-          <span className={running ? "badge muted pulse" : "badge muted"}>{status}</span>
+          <div className="row" style={{ gap: 8 }}>
+            {status === "queued" && (
+              <span className="muted">
+                {queuePos == null || queuePos === 0 ? "next up" : `${queuePos} ahead in queue`}
+              </span>
+            )}
+            <span className={running ? "badge muted pulse" : "badge muted"}>{status}</span>
+            {cancellable && (
+              <button className="danger" onClick={cancel} disabled={cancelling}>
+                {cancelling ? "Cancelling…" : "Cancel"}
+              </button>
+            )}
+          </div>
         </div>
         {signals && (
           <div className="signals" style={{ marginTop: 12 }}>

@@ -1,28 +1,58 @@
-// Thin API client for the Verifyr backend. Token stored in localStorage.
+// Thin API client for the Verifyr backend. The bearer token is the Supabase
+// access token, kept in sync by the AuthProvider via setAccessToken().
 
 const BASE: string = (import.meta as any).env?.VITE_API_BASE ?? "";
 
-let token: string | null = localStorage.getItem("verifyr_token");
+let accessToken: string | null = null;
 
-export function getToken() {
-  return token;
-}
-export function setToken(t: string | null) {
-  token = t;
-  if (t) localStorage.setItem("verifyr_token", t);
-  else localStorage.removeItem("verifyr_token");
+// Session hooks, registered by the AuthProvider. `refresh` asks Supabase for a
+// fresh access token (it auto-refreshes when possible); `onExpired` is called
+// when the session can no longer be recovered so the UI can bounce to sign-in.
+let refreshSession: (() => Promise<string | null>) | null = null;
+let onSessionExpired: (() => void) | null = null;
+
+export function setSessionHandlers(handlers: {
+  refresh: () => Promise<string | null>;
+  onExpired: () => void;
+}) {
+  refreshSession = handlers.refresh;
+  onSessionExpired = handlers.onExpired;
 }
 
-async function req(path: string, opts: RequestInit = {}): Promise<any> {
+export class SessionExpiredError extends Error {
+  constructor() {
+    super("Your session has expired. Please sign in again.");
+    this.name = "SessionExpiredError";
+  }
+}
+
+export function setAccessToken(t: string | null) {
+  accessToken = t;
+}
+export function getAccessToken() {
+  return accessToken;
+}
+
+async function req(path: string, opts: RequestInit = {}, retried = false): Promise<any> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((opts.headers as Record<string, string>) || {}),
   };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
   const res = await fetch(BASE + path, { ...opts, headers });
   if (res.status === 401) {
-    setToken(null);
-    throw new Error("unauthorized");
+    // The access token may have simply expired — try once to refresh it (via
+    // Supabase's refresh token) and replay the request transparently.
+    if (!retried && refreshSession) {
+      const fresh = await refreshSession();
+      if (fresh && fresh !== accessToken) {
+        accessToken = fresh;
+        return req(path, opts, true);
+      }
+    }
+    // Couldn't recover — the refresh token is gone/expired. Surface it.
+    onSessionExpired?.();
+    throw new SessionExpiredError();
   }
   if (!res.ok) {
     let detail = res.statusText;
@@ -39,18 +69,6 @@ async function req(path: string, opts: RequestInit = {}): Promise<any> {
 }
 
 export const api = {
-  register: (email: string, password: string) =>
-    req("/api/auth/register", { method: "POST", body: JSON.stringify({ email, password }) }),
-  login: async (email: string, password: string) => {
-    const body = new URLSearchParams({ username: email, password });
-    const res = await fetch(BASE + "/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
-    if (!res.ok) throw new Error("Incorrect email or password");
-    return res.json();
-  },
   me: () => req("/api/auth/me"),
   listChecks: () => req("/api/checks"),
   getCheck: (id: number) => req(`/api/checks/${id}`),
@@ -60,13 +78,14 @@ export const api = {
   runCheck: (id: number) => req(`/api/checks/${id}/run`, { method: "POST" }),
   listRuns: (checkId?: number) => req("/api/runs" + (checkId ? `?check_id=${checkId}` : "")),
   getRun: (id: number) => req(`/api/runs/${id}`),
+  cancelRun: (id: number) => req(`/api/runs/${id}/cancel`, { method: "POST" }),
   // APK + quick (ad-hoc) test
   uploadApk: async (file: File, onProgress?: (pct: number) => void) => {
     // XHR so we can report upload progress for large APKs.
     return new Promise<any>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", BASE + "/api/apks");
-      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      if (accessToken) xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
       };
@@ -93,10 +112,14 @@ export function streamUrl(runId: number): string {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const httpBase = BASE || `${location.protocol}//${location.host}`;
   const wsBase = httpBase.replace(/^http/, proto === "wss" ? "wss" : "ws");
-  return `${wsBase}/api/runs/${runId}/stream?token=${encodeURIComponent(token || "")}`;
+  return `${wsBase}/api/runs/${runId}/stream?token=${encodeURIComponent(accessToken || "")}`;
 }
 
+// Screenshots are served by an ownership-checked proxy that takes the token as a
+// query param (an <img> can't send an Authorization header).
 export function artifact(url: string | null): string | null {
   if (!url) return null;
-  return BASE + url;
+  const sep = url.includes("?") ? "&" : "?";
+  const auth = accessToken ? `${sep}token=${encodeURIComponent(accessToken)}` : "";
+  return BASE + url + auth;
 }

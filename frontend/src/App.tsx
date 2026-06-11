@@ -1,23 +1,18 @@
 import { useEffect, useState } from "react";
-import { api, getToken, setToken } from "./api";
+import { api } from "./api";
+import { useAuth } from "./auth";
 import Login from "./components/Login";
 import CheckEditor from "./components/CheckEditor";
 import QuickTest from "./components/QuickTest";
 import RunLive, { verdictClass } from "./components/RunLive";
 
 export default function App() {
-  const [authed, setAuthed] = useState<boolean | null>(null);
-  const [email, setEmail] = useState("");
+  const { session, email, loading, expired, signOut } = useAuth();
 
-  useEffect(() => {
-    if (!getToken()) return setAuthed(false);
-    api.me().then((u) => { setEmail(u.email); setAuthed(true); }).catch(() => setAuthed(false));
-  }, []);
+  if (loading) return <div className="center muted">Loading…</div>;
+  if (!session) return <Login expired={expired} />;
 
-  if (authed === null) return <div className="center muted">Loading…</div>;
-  if (!authed) return <Login onAuthed={() => window.location.reload()} />;
-
-  return <Dashboard email={email} onLogout={() => { setToken(null); window.location.reload(); }} />;
+  return <Dashboard email={email ?? ""} onLogout={signOut} />;
 }
 
 function Dashboard({ email, onLogout }: { email: string; onLogout: () => void }) {

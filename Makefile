@@ -19,8 +19,8 @@ logs:                ## Tail app logs
 build:               ## Build the image only
 	docker compose build
 
-seed:                ## Create an admin user (override EMAIL/PASS)
-	docker compose exec app python -m server.seed --email $(or $(EMAIL),admin@verifyr.local) --password $(or $(PASS),changeme123) --checks checks.json
+seed:                ## Import sample checks for a Supabase user (USER_ID=<uuid> [CHECKS=checks.json])
+	docker compose exec app python -m server.seed --checks $(or $(CHECKS),checks.json) --user-id $(USER_ID)
 
 shell:               ## Open a shell in the app container
 	docker compose exec app sh

@@ -1,4 +1,4 @@
-"""Checks CRUD + trigger-a-run."""
+"""Checks CRUD + trigger-a-run. All rows are scoped to the current user."""
 
 from __future__ import annotations
 
@@ -7,12 +7,20 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import current_user
-from ..models import Check, Run, User
+from ..models import Check, Run
 from ..runner import enqueue_run
 from ..schemas import CheckCreate, CheckOut, CheckUpdate, RunSummary
+from ..supabase_client import SupaUser
 from .. import scheduler as sched
 
 router = APIRouter(prefix="/api/checks", tags=["checks"])
+
+
+def _owned_check(db: Session, check_id: int, user: SupaUser) -> Check:
+    check = db.get(Check, check_id)
+    if not check or check.user_id != user.id:
+        raise HTTPException(404, "Check not found")
+    return check
 
 
 def _to_out(db: Session, check: Check) -> CheckOut:
@@ -28,13 +36,15 @@ def _to_out(db: Session, check: Check) -> CheckOut:
 
 
 @router.get("", response_model=list[CheckOut])
-def list_checks(db: Session = Depends(get_db), _: User = Depends(current_user)):
-    return [_to_out(db, c) for c in db.query(Check).order_by(Check.name).all()]
+def list_checks(db: Session = Depends(get_db), user: SupaUser = Depends(current_user)):
+    rows = db.query(Check).filter(Check.user_id == user.id).order_by(Check.name).all()
+    return [_to_out(db, c) for c in rows]
 
 
 @router.post("", response_model=CheckOut, status_code=201)
-def create_check(payload: CheckCreate, db: Session = Depends(get_db), _: User = Depends(current_user)):
+def create_check(payload: CheckCreate, db: Session = Depends(get_db), user: SupaUser = Depends(current_user)):
     check = Check(
+        user_id=user.id,
         name=payload.name,
         config=payload.config.model_dump(),
         schedule=payload.schedule,
@@ -49,20 +59,15 @@ def create_check(payload: CheckCreate, db: Session = Depends(get_db), _: User = 
 
 
 @router.get("/{check_id}", response_model=CheckOut)
-def get_check(check_id: int, db: Session = Depends(get_db), _: User = Depends(current_user)):
-    check = db.get(Check, check_id)
-    if not check:
-        raise HTTPException(404, "Check not found")
-    return _to_out(db, check)
+def get_check(check_id: int, db: Session = Depends(get_db), user: SupaUser = Depends(current_user)):
+    return _to_out(db, _owned_check(db, check_id, user))
 
 
 @router.put("/{check_id}", response_model=CheckOut)
 def update_check(
-    check_id: int, payload: CheckUpdate, db: Session = Depends(get_db), _: User = Depends(current_user)
+    check_id: int, payload: CheckUpdate, db: Session = Depends(get_db), user: SupaUser = Depends(current_user)
 ):
-    check = db.get(Check, check_id)
-    if not check:
-        raise HTTPException(404, "Check not found")
+    check = _owned_check(db, check_id, user)
     data = payload.model_dump(exclude_unset=True)
     if "config" in data and data["config"] is not None:
         check.config = payload.config.model_dump()
@@ -76,18 +81,14 @@ def update_check(
 
 
 @router.delete("/{check_id}", status_code=204)
-def delete_check(check_id: int, db: Session = Depends(get_db), _: User = Depends(current_user)):
-    check = db.get(Check, check_id)
-    if not check:
-        raise HTTPException(404, "Check not found")
+def delete_check(check_id: int, db: Session = Depends(get_db), user: SupaUser = Depends(current_user)):
+    check = _owned_check(db, check_id, user)
     db.delete(check)
     db.commit()
     sched.sync_jobs()
 
 
 @router.post("/{check_id}/run", response_model=RunSummary, status_code=202)
-def run_check_now(check_id: int, db: Session = Depends(get_db), _: User = Depends(current_user)):
-    check = db.get(Check, check_id)
-    if not check:
-        raise HTTPException(404, "Check not found")
+def run_check_now(check_id: int, db: Session = Depends(get_db), user: SupaUser = Depends(current_user)):
+    _owned_check(db, check_id, user)
     return enqueue_run(db, check_id, trigger="manual")
